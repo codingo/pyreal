@@ -12,8 +12,8 @@ import json
 
 
 
-states = ['nsw','vic','wa','sa','qld','tas','act']
-#states = ['tas']
+#states = ['nsw','vic','wa','sa','qld','tas','act']
+states = ['tas']
 base_url = 'https://www.realestate.com.au/auction-results/'
 pro_url = 'https://www.realestate.com.au'
 
