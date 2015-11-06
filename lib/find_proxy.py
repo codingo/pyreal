@@ -6,10 +6,6 @@ from bs4 import BeautifulSoup
 from pymongo import MongoClient
 
 
-
-f = open('proxy.csv','w')
-f.write(','.join(['url','country','rating','access time','uptime %','online since','last test','ssl']) + '\n')
-
 client = MongoClient() 
 
 db = client['pyreal']
@@ -34,10 +30,10 @@ else:
     print 'Get proxy error, start url does not work'
 
 def test_proxy(proxy_dict):
-    url = 'http://www.realestate.com.au'
+    url = 'http://rp.ozdata.info/proxy.html'
     headers = {'User-Agent':'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Ubuntu Chromium/45.0.2454.101 Chrome/45.0.2454.101 Safari/537.36'}
     r = requests.get(url, proxies = proxy_dict, headers = headers)
-    if r.status_code == 200:
+    if r.status_code == 200 and r.text.rstrip() == 'Success':
         return True
     else:
         return False
@@ -45,7 +41,7 @@ def test_proxy(proxy_dict):
 for i in range(num_of_pages):
   q.put('http://www.proxy4free.com/list/webproxy'+ str(i+1) +'.html')
 
-def downloader(queue,fd):
+def downloader(queue,proxies):
   while True:
     url = queue.get()
     r = requests.get(url)
@@ -65,13 +61,11 @@ def downloader(queue,fd):
         else:
             print proxy_tmp['http'] + ' does not work, ignore it'
     q.task_done()
- 
-for i in range(max_threads):
-  worker = Thread(target=downloader, args=(q,f,))
-  worker.setDaemon(True)
-  worker.start()
 
-
-q.join()
-f.close()
-client.close()
+if __name__ == '__main__':
+    for i in range(max_threads):
+      worker = Thread(target=downloader, args=(q,proxies))
+      worker.setDaemon(True)
+      worker.start()
+    q.join()
+    client.close()

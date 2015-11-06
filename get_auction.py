@@ -7,24 +7,26 @@ from bs4 import BeautifulSoup
 import base64
 import cStringIO
 from time import gmtime, strftime
+from datetime import datetime
 import re
 import json
+from pymongo import MongoClient
 
 
 
-#states = ['nsw','vic','wa','sa','qld','tas','act']
-states = ['tas']
+states = ['nsw','vic','wa','sa','qld','tas','act']
+#states = ['tas']
 base_url = 'https://www.realestate.com.au/auction-results/'
 pro_url = 'https://www.realestate.com.au'
 
-run_date = strftime("%d/%m/%y",gmtime())
-str_run_date = strftime("%Y%m%d",gmtime())
+#run_date = strftime("%c",gmtime())
+#str_run_date = strftime("%Y%m%d",gmtime())
 
 def get_school_dict(ele_school_div):
     base_url = 'http://school-service.realestate.com.au/closest_by_type?'
     lat = ele_school_div['data-latitude']
     lon = ele_school_div['data-longitude']
-    r = urllib.urlopen(base_url + 'lat=' + lat + '&lon=' + lon).read()
+    r = urllib.urlopen(base_url + 'lat=' + lat + '&lon=' + lon + '&count=5').read()
     return json.loads(r)
 
 
@@ -35,10 +37,18 @@ def get_property_features(prop_url):
     general = {}
     indoor = {}
     outdoor = {}
+    eco = {}
+    other = {}
     try:
         r = urllib.urlopen(prop_url).read()
         detail['Status'] = 'Ok'
         soup = BeautifulSoup(r)
+        # get description
+        desc = soup.find("div",{"id":"description"})
+        if desc:
+            detail['Description'] = desc.find("p",class_="body").text
+        else:
+            detail['Description'] = 'null'
         f_all = soup.find_all("div",class_="featureList")
         for f in f_all:
             for ul in f.find_all("ul"):
@@ -71,6 +81,22 @@ def get_property_features(prop_url):
                                 outdoor[key] = value
                             else:
                                 outdoor[li.text] = 'Yes'
+                if ul.find("li",class_="header").text == 'Eco Friendly Features':
+                    for li in ul.find_all("li"):
+                        if li.text <> 'Eco Friendly Features':
+                            if ':' in li.text:
+                                key, value = li.text.split(':')[0], li.text.split(':')[1]
+                                eco[key] = value
+                            else:
+                                eco[li.text] = 'Yes'
+                if ul.find("li",class_="header").text == 'Other Features':
+                    for li in ul.find_all("li"):
+                        if li.text <> 'Other Features':
+                            if ':' in li.text:
+                                key, value = li.text.split(':')[0], li.text.split(':')[1]
+                                other[key.replace('.','')] = value
+                            else:
+                                other[li.text.replace(',','')] = 'Yes'
         school_ele = soup.find("div",class_="rui-school-information")
         if school_ele:
             school_dict = get_school_dict(school_ele)
@@ -79,7 +105,9 @@ def get_property_features(prop_url):
         detail['General']=general
         detail['Indoor']=indoor
         detail['Outdoor']=outdoor
-        detail['schools']=school_dict
+        detail['Eco_System']=eco
+        detail['Other']=other
+        detail['Schools']=school_dict
     except Exception as inst:
         detail['Status'] = 'Error'
         print inst
@@ -112,6 +140,9 @@ def get_beds_from_base64(base64_image):
 properties = []
 
 if __name__ == '__main__':
+    client = MongoClient()
+    db = client['pyreal']
+    auction_collection = db.auction
     for state in states:
         url = base_url + state
         r = urllib.urlopen(url).read()
@@ -122,7 +153,7 @@ if __name__ == '__main__':
             print 'Processing state/suburb: %s/%s' % (state.upper(), sub)
             for p in result.find_all("tbody"):
                 tmp_p = {}
-                tmp_p['Scrape_Date'] = run_date
+                tmp_p['Scrape_Date'] = datetime.utcnow()
                 try:
                     # get address
                     ele_addr = p.find("a",class_="col-address")
@@ -212,10 +243,9 @@ if __name__ == '__main__':
                     tmp_p['Agency_Mob_Link'] = agency_mobile_link
                     tmp_p['Link'] = addr_link
                     tmp_p['Features'] = features
-                    properties.append(tmp_p)
+                    auction_collection.insert(tmp_p)
                 except Exception as inst:
-                    print type(inst)
+                    print tmp_p
                     print inst.args
                     print inst
-    with open(str_run_date + '.json','w') as outfile:
-        json.dump(properties,outfile,encoding='utf-8',indent=2,separators=(', ', ': '))
+    client.close()

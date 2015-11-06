@@ -20,10 +20,10 @@ for url in soldurls[333:340]:
     if html:
         soup = BeautifulSoup(html)
         ele_num = soup.find("div",class_="resultsInfo rui-clearfix")
-        print ele_num.p.text
+        print ele_num
     else:
         print 'http failed'
 
 
-
+client.close()
 
