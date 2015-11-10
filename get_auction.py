@@ -3,6 +3,7 @@
 import Image
 import pytesseract
 import urllib
+import requests
 from bs4 import BeautifulSoup
 import base64
 import cStringIO
@@ -26,8 +27,8 @@ def get_school_dict(ele_school_div):
     base_url = 'http://school-service.realestate.com.au/closest_by_type?'
     lat = ele_school_div['data-latitude']
     lon = ele_school_div['data-longitude']
-    r = urllib.urlopen(base_url + 'lat=' + lat + '&lon=' + lon + '&count=5').read()
-    return json.loads(r)
+    r = requests.get(base_url + 'lat=' + lat + '&lon=' + lon + '&count=5', headers = {'User-Agent':'Chrome 5.5'})
+    return json.loads(r.text)
 
 
 
@@ -40,9 +41,10 @@ def get_property_features(prop_url):
     eco = {}
     other = {}
     try:
-        r = urllib.urlopen(prop_url).read()
+        # r = urllib.urlopen(prop_url).read()
+        r = requests.get(prop_url, headers = {'User-Agent':'Chrome 5.5'})
         detail['Status'] = 'Ok'
-        soup = BeautifulSoup(r)
+        soup = BeautifulSoup(r.text)
         # get description
         desc = soup.find("div",{"id":"description"})
         if desc:
@@ -145,13 +147,14 @@ if __name__ == '__main__':
     auction_collection = db.auction
     for state in states:
         url = base_url + state
-        r = urllib.urlopen(url).read()
-        soup = BeautifulSoup(r)
+        r = requests.get(url, headers = {'User-Agent':'Chrome 5.5'})
+        #r = urllib.urlopen(url).read()
+        soup = BeautifulSoup(r.text)
         results = soup.find_all("table", class_="rui-table rui-table-hover rui-table-striped auction-results-table")
         for result in results:
             sub = result.find("div",class_="col-suburb-name").text
             print 'Processing state/suburb: %s/%s' % (state.upper(), sub)
-            for p in result.find_all("tbody"):
+            for p in result.find("tbody").find_all("tr"):
                 tmp_p = {}
                 tmp_p['Scrape_Date'] = datetime.utcnow()
                 try:
@@ -243,6 +246,7 @@ if __name__ == '__main__':
                     tmp_p['Agency_Mob_Link'] = agency_mobile_link
                     tmp_p['Link'] = addr_link
                     tmp_p['Features'] = features
+                    print '\t' + tmp_p['Address']
                     auction_collection.insert(tmp_p)
                 except Exception as inst:
                     print tmp_p

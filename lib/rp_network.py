@@ -40,15 +40,6 @@ def get_sold_page_url(suburb_str,page_num):
     """
     return "http://www.realestate.com.au/sold/in-"+suburb_str +"/list-"+str(page_num)+"?includeSurrounding=false"
 
-def get_max_page(int_total_property):
-    """
-    return the max page based on total property
-    """
-    per_page = 20
-    if int_total_property <= 20:
-        return 1
-    else:
-        return (int_total_property - (int_total_property % per_page)) / per_page + 1
 
 def rp_open(url,all_proxies):
     proxies = get_proxy(all_proxies)
