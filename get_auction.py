@@ -12,11 +12,13 @@ from datetime import datetime
 import re
 import json
 from pymongo import MongoClient
+from pymongo import errors as db_error
 
 
 
-states = ['nsw','vic','wa','sa','qld','tas','act']
+states = ['nsw','vic','wa','sa','qld','act']
 #states = ['tas']
+states = ['vic']
 base_url = 'https://www.realestate.com.au/auction-results/'
 pro_url = 'https://www.realestate.com.au'
 
@@ -96,9 +98,9 @@ def get_property_features(prop_url):
                         if li.text <> 'Other Features':
                             if ':' in li.text:
                                 key, value = li.text.split(':')[0], li.text.split(':')[1]
-                                other[key.replace('.','')] = value
+                                other[re.sub(r'[,\.]','',key)] = value
                             else:
-                                other[li.text.replace(',','')] = 'Yes'
+                                other[re.sub(r'[,\.]','',li.text)] = 'Yes'
         school_ele = soup.find("div",class_="rui-school-information")
         if school_ele:
             school_dict = get_school_dict(school_ele)
@@ -154,102 +156,106 @@ if __name__ == '__main__':
         for result in results:
             sub = result.find("div",class_="col-suburb-name").text
             print 'Processing state/suburb: %s/%s' % (state.upper(), sub)
-            for p in result.find("tbody").find_all("tr"):
-                tmp_p = {}
-                tmp_p['Scrape_Date'] = datetime.utcnow()
-                try:
-                    # get address
-                    ele_addr = p.find("a",class_="col-address")
-                    if ele_addr:
-                        addr = ele_addr.text
-                        real_id = ele_addr['href'][1:]
-                        addr_link = pro_url + ele_addr['href']
-                        # print '\tGetting property features %s' % real_id
-                        features = get_property_features(addr_link)
-                        # get land size
-                        # print features.keys()
-                        if features['Status'] == 'Ok' and 'Land Size' in features['General'].keys():
-                            LandSize = features['General']['Land Size']
-                        else:
-                            LandSize = '0'
-                    else:
-                        ele_addr = p.find("div",class_ = "col-address")
+            #if sub:
+            if sub in ["Mill Park","Chirnside Park"]:
+                for p in result.find("tbody").find_all("tr"):
+                    tmp_p = {}
+                    tmp_p['Scrape_Date'] = datetime.utcnow()
+                    try:
+                        # get address
+                        ele_addr = p.find("a",class_="col-address")
                         if ele_addr:
                             addr = ele_addr.text
-                            addr_link = '#'
-                            real_id = '0'
+                            real_id = ele_addr['href'][1:]
+                            addr_link = pro_url + ele_addr['href']
+                            # print '\tGetting property features %s' % real_id
+                            features = get_property_features(addr_link)
+                            # get land size
+                            # print features.keys()
+                            if features['Status'] == 'Ok' and 'Land Size' in features['General'].keys():
+                                LandSize = features['General']['Land Size']
+                            else:
+                                LandSize = '0'
                         else:
-                            print 'col-address not found'
+                            ele_addr = p.find("div",class_ = "col-address")
+                            if ele_addr:
+                                addr = ele_addr.text
+                                addr_link = '#'
+                                real_id = '0'
+                            else:
+                                print 'col-address not found'
 
-                    # get price
-                    ele_price = p.find("div",class_ = "col-property-price noscrape")
-                    if ele_price:
-                        price = get_string_from_base64(ele_price.find("img")['src'][22:])
-                    else:
-                        print 'col-property-price noscrape not found'
-
-                    # get num of beds
-                    ele_beds = p.find("div",class_ = "col-num-beds noscrape")
-                    if ele_beds:
-                        beds = get_beds_from_base64(ele_beds.find("img")['src'][22:])
-                    else:
-                        print 'col-num-beds noscrape not found'
-
-                    # get property type
-                    ele_type = p.find("div",class_="col-property-type")
-                    if ele_type:
-                        p_type = ele_type.text
-                    else:
-                        print 'col-property-type not found'
-
-                    # get result
-                    ele_result = p.find("div",class_="col-auction-result")
-                    if ele_result:
-                        auction_result = ele_result.text
-                    else:
-                        print 'col-auction-result not found'
-
-                    # get auction date
-                    ele_date = p.find("div",class_ = "col-auction-date noscrape")
-                    if ele_date:
-                        auction_date = get_string_from_base64(ele_date.find("img")['src'][22:])
-                    else:
-                        print 'col-auction-date noscrape not found'
-
-                    # get agency information
-                    ele_agent = p.find("div",class_ = "col-agent ellipsis")
-                    if ele_agent:
-                        ele_agency_profile_url = ele_agent.find("a",class_="agency-profile-url")
-                        ele_mobile_agency_profile_url = ele_agent.find("a",class_="mobile-agency-profile-url")
-                        if ele_agency_profile_url:
-                            agency_name = ele_agency_profile_url.text
-                            agency_link = pro_url + ele_agency_profile_url['href']
-                            agency_mobile_link = pro_url + ele_mobile_agency_profile_url['href']
+                        # get price
+                        ele_price = p.find("div",class_ = "col-property-price noscrape")
+                        if ele_price:
+                            price = get_string_from_base64(ele_price.find("img")['src'][22:])
                         else:
-                            agency_nanme = ele_agent.text
-                            agency_link = '#'
-                            agency_mobile_link = '#'
-                    else:
-                        print 'col-auction-date noscrape not found'
+                            print 'col-property-price noscrape not found'
 
-                    tmp_p['Property_Id'] = int(real_id)
-                    tmp_p['Auction_Date'] = auction_date
-                    tmp_p['State'] = state.upper()
-                    tmp_p['Suburb'] = sub
-                    tmp_p['Address'] = addr
-                    tmp_p['Number_Of_Bedrooms'] = int(beds)
-                    tmp_p['Price'] = int(price)
-                    tmp_p['Land_Size'] = int(LandSize)
-                    tmp_p['Auction_Result'] = auction_result
-                    tmp_p['Agency_Name'] = agency_name
-                    tmp_p['Agency_Web_Link'] = agency_link
-                    tmp_p['Agency_Mob_Link'] = agency_mobile_link
-                    tmp_p['Link'] = addr_link
-                    tmp_p['Features'] = features
-                    print '\t' + tmp_p['Address']
-                    auction_collection.insert(tmp_p)
-                except Exception as inst:
-                    print tmp_p
-                    print inst.args
-                    print inst
+                        # get num of beds
+                        ele_beds = p.find("div",class_ = "col-num-beds noscrape")
+                        if ele_beds:
+                            beds = get_beds_from_base64(ele_beds.find("img")['src'][22:])
+                        else:
+                            print 'col-num-beds noscrape not found'
+
+                        # get property type
+                        ele_type = p.find("div",class_="col-property-type")
+                        if ele_type:
+                            p_type = ele_type.text
+                        else:
+                            print 'col-property-type not found'
+
+                        # get result
+                        ele_result = p.find("div",class_="col-auction-result")
+                        if ele_result:
+                            auction_result = ele_result.text
+                        else:
+                            print 'col-auction-result not found'
+
+                        # get auction date
+                        ele_date = p.find("div",class_ = "col-auction-date noscrape")
+                        if ele_date:
+                            auction_date = get_string_from_base64(ele_date.find("img")['src'][22:])
+                        else:
+                            print 'col-auction-date noscrape not found'
+
+                        # get agency information
+                        ele_agent = p.find("div",class_ = "col-agent ellipsis")
+                        if ele_agent:
+                            ele_agency_profile_url = ele_agent.find("a",class_="agency-profile-url")
+                            ele_mobile_agency_profile_url = ele_agent.find("a",class_="mobile-agency-profile-url")
+                            if ele_agency_profile_url:
+                                agency_name = ele_agency_profile_url.text
+                                agency_link = pro_url + ele_agency_profile_url['href']
+                                agency_mobile_link = pro_url + ele_mobile_agency_profile_url['href']
+                            else:
+                                agency_nanme = ele_agent.text
+                                agency_link = '#'
+                                agency_mobile_link = '#'
+                        else:
+                            print 'col-auction-date noscrape not found'
+
+                        tmp_p['Property_Id'] = int(real_id)
+                        tmp_p['Auction_Date'] = auction_date
+                        tmp_p['State'] = state.upper()
+                        tmp_p['Suburb'] = sub
+                        tmp_p['Address'] = addr
+                        tmp_p['Number_Of_Bedrooms'] = int(beds)
+                        tmp_p['Price'] = int(price)
+                        tmp_p['Land_Size'] = int(LandSize)
+                        tmp_p['Auction_Result'] = auction_result
+                        tmp_p['Agency_Name'] = agency_name
+                        tmp_p['Agency_Web_Link'] = agency_link
+                        tmp_p['Agency_Mob_Link'] = agency_mobile_link
+                        tmp_p['Link'] = addr_link
+                        tmp_p['Features'] = features
+                        print '\t' + tmp_p['Address']
+                        auction_collection.insert(tmp_p)
+                    except db_error.DuplicateKeyError:
+                        print "***** [Warning] Property is existing" + tmp_p["Address"] 
+                    except Exception as inst:
+                        print tmp_p
+                        print inst.args
+                        print inst
     client.close()
