@@ -156,8 +156,9 @@ if __name__ == '__main__':
         for result in results:
             sub = result.find("div",class_="col-suburb-name").text
             print 'Processing state/suburb: %s/%s' % (state.upper(), sub)
-            #if sub:
-            if sub in ["Mill Park","Chirnside Park"]:
+            # below two line to switch the mode
+            if sub:
+            #if sub in ["Mill Park","Chirnside Park"]:
                 for p in result.find("tbody").find_all("tr"):
                     tmp_p = {}
                     tmp_p['Scrape_Date'] = datetime.utcnow()
